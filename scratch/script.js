@@ -5,7 +5,7 @@ const cols = 10, rows = 15;
 const cellSize = 40;
 const stack = [];
 const grid = [];
-const adjacencyList = {}; // Graph representation
+let adjacencyList = {}; // Graph representation
 
 class Cell {
     constructor(x, y) {
@@ -77,6 +77,26 @@ function getUnvisitedNeighbors(cell) {
     return neighbors;
 }
 
+function getNeighbors(cell) {
+    const { x, y } = cell;
+    const neighbors = [];
+
+    const directions = [
+        { dx: 0, dy: -1 }, // Up
+        { dx: 1, dy: 0 },  // Right
+        { dx: 0, dy: 1 },  // Down
+        { dx: -1, dy: 0 }  // Left
+    ];
+
+    for (const { dx, dy } of directions) {
+        const nx = x + dx, ny = y + dy;
+        if (grid[ny] && grid[ny][nx]) {
+            neighbors.push(grid[ny][nx]);
+        }
+    }
+    return neighbors;
+}
+
 function generateMaze() {
     if (stack.length > 0) {
         let neighbors = getUnvisitedNeighbors(current);
@@ -93,7 +113,21 @@ function generateMaze() {
 
         requestAnimationFrame(generateMaze);
     } else {
+        addCycles();
         console.log("Adjacency List:", adjacencyList); // Log the adjacency list after maze generation
+    }
+}
+
+function addCycles() {
+    for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+            const cell = grid[y][x];
+            let neighbors = getNeighbors(cell);
+            if (neighbors.length > 0 && Math.random() < 0.1) { // 30% chance to create a cycle
+                let randomNeighbor = neighbors[Math.floor(Math.random() * neighbors.length)];
+                cell.drawLineTo(randomNeighbor);
+            }
+        }
     }
 }
 
@@ -165,7 +199,83 @@ function drawPath(path) {
     ctx.stroke();
 }
 
+function findAllPaths(startCell, endCell) {
+    const startKey = `${startCell.x},${startCell.y}`;
+    const endKey = `${endCell.x},${endCell.y}`;
+    const allPaths = [];
+    const currentPath = [];
+    
+    function dfs(currentKey, visited) {
+        currentPath.push(currentKey);
+        visited.add(currentKey);
+
+        if (currentKey === endKey) {
+            allPaths.push([...currentPath]); // Store found path
+        } else {
+            if (adjacencyList[currentKey]) {
+                for (const neighbor of adjacencyList[currentKey]) {
+                    if (!visited.has(neighbor)) { // Avoid cycles in a single path
+                        dfs(neighbor, visited);
+                    }
+                }
+            }
+        }
+
+        // Backtrack
+        currentPath.pop();
+        visited.delete(currentKey);
+    }
+
+    dfs(startKey, new Set());
+
+    return allPaths;
+}
+
+function getRandomColor() {
+    const r = Math.floor(Math.random() * 256); // Red (0-255)
+    const g = Math.floor(Math.random() * 256); // Green (0-255)
+    const b = Math.floor(Math.random() * 256); // Blue (0-255)
+    return `rgb(${r},${g},${b})`;
+}
+
+function drawAllPaths(paths) {
+    // const colors = ["blue", "orange", "purple", "pink", "yellow", "cyan"];
+    // let colorIndex = 0;
+
+    for (const path of paths) {
+        ctx.strokeStyle = getRandomColor();
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+
+        for (let i = 0; i < path.length - 1; i++) {
+            const [x1, y1] = path[i].split(",").map(Number);
+            const [x2, y2] = path[i + 1].split(",").map(Number);
+
+            ctx.moveTo(x1 * cellSize + cellSize / 2, y1 * cellSize + cellSize / 2);
+            ctx.lineTo(x2 * cellSize + cellSize / 2, y2 * cellSize + cellSize / 2);
+        }
+
+        ctx.stroke();
+        // colorIndex++; // Change color for next path
+    }
+}
+
+
 let shortest = [];
+let alltracks = [];
+
+function solveall() {
+    const allPaths = findAllPaths(startCell, endCell);
+    alltracks = [...allPaths];
+    if (allPaths.length > 0) {
+        drawAllPaths(allPaths);
+        console.log("All Paths:", allPaths);
+    } else {
+        console.log("No paths found!");
+    }
+}
+
+
 function solve(){
     const path = findShortestPath(startCell, endCell);
     shortest = [...path];
@@ -199,6 +309,9 @@ function clearStartEndPoints() {
     startCell = null;
     endCell = null;
     clearPath(shortest);
+    for(let i=0; i<alltracks.length; i++){
+        clearPath(alltracks[i]);
+    }
 }
 
 function clearPath(path) {
@@ -240,12 +353,64 @@ function drawPoint(cell, color) {
     ctx.fill();
 }
 
+function redrawMaze() {
+    // Clear canvas
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = 20;
+    ctx.lineCap = "square";
+
+    // Draw connections based on adjacency list
+    for (const key in adjacencyList) {
+        const [x1, y1] = key.split(",").map(Number);
+        for (const neighbor of adjacencyList[key]) {
+            const [x2, y2] = neighbor.split(",").map(Number);
+
+            ctx.beginPath();
+            ctx.moveTo(x1 * cellSize + cellSize / 2, y1 * cellSize + cellSize / 2);
+            ctx.lineTo(x2 * cellSize + cellSize / 2, y2 * cellSize + cellSize / 2);
+            ctx.stroke();
+        }
+    }
+}
+
+function saveMaze() {
+    const dataStr = JSON.stringify(adjacencyList);
+    const blob = new Blob([dataStr], { type: "application/json" });
+    const link = document.createElement("a");
+    
+    link.href = URL.createObjectURL(blob);
+    link.download = "maze.json";
+    link.click();
+}
+
+function loadMaze(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            adjacencyList = JSON.parse(e.target.result);
+            redrawMaze();
+        } catch (error) {
+            console.error("Invalid file format", error);
+        }
+    };
+    reader.readAsText(file);
+}
+
+
 document.getElementById("download").addEventListener("click", function() {
     const link = document.createElement("a");
     link.download = "maze.png";
     link.href = canvas.toDataURL("image/png");
     link.click();
 });
+
+document.getElementById("loadMazeFile").addEventListener("change", loadMaze);
 
 const clearButton = document.createElement("button");
 clearButton.innerText = "Clear Points";
@@ -261,4 +426,5 @@ ctx.fillStyle = "white";
 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
 // Start maze generation
-generateMaze();
+// generateMaze();
+

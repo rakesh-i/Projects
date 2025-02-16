@@ -6,9 +6,14 @@
     <title>Maze Generator</title>
 </head>
 <body>
+    <button id="generate" onclick="generateMaze()">Generate Maze</button>
     <button id="download">Download Maze</button>
     <button id="startend" onclick=drawStartEnd()>Start End</button>
     <button id="solvebfs" onclick=solve()>Solve bfs</button>
+    <button id="solvebfs" onclick=solveall()>Solve All bfs</button>
+    <button onclick="saveMaze()">Save Maze</button>
+    <input type="file" id="loadMazeFile">
+    <button onclick="document.getElementById('loadMazeFile').click()">Load Maze</button>
     <canvas id="mazeCanvas"></canvas>
     <script src="script.js"></script>
 </body>
